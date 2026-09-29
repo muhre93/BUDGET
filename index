@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CEO Family Budget</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-database-compat.js"></script>
+
+    <style>
+        :root {
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --primary: #0f172a;
+            --primary-hover: #334155;
+            --accent: #2563eb;
+            --success: #10b981;
+            --danger: #ef4444;
+            --border: #e2e8f0;
+            --radius: 12px;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); line-height: 1.5; padding-bottom: 80px; }
+        
+        /* 📱 Navigation / Tabs */
+        nav { background: var(--card-bg); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 50; display: flex; justify-content: center; gap: 10px; padding: 10px 15px; }
+        .tab-btn { background: transparent; border: none; padding: 10px 16px; font-weight: 600; color: var(--text-muted); cursor: pointer; border-radius: 8px; transition: all 0.2s; font-size: 14px; }
+        .tab-btn.active { background: #e2e8f0; color: var(--text-main); }
+        .tab-btn:hover:not(.active) { background: #f1f5f9; }
+
+        .container { max-width: 900px; margin: 0 auto; padding: 20px 15px; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Header */
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+        h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.5px; }
+        .date { font-size: 14px; color: var(--text-muted); }
+        .header-actions { display: flex; gap: 8px; }
+        .btn-icon { background: var(--card-bg); border: 1px solid var(--border); padding: 8px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--text-main); display: flex; align-items: center; gap: 6px; box-shadow: var(--shadow); }
+        .sync-status { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--danger); transition: background 0.3s; }
+        .sync-status.active { background: var(--success); box-shadow: 0 0 8px var(--success); }
+
+        /* Dashboard Grid */
+        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 24px; }
+        .kpi-card { background: var(--card-bg); padding: 16px; border-radius: var(--radius); box-shadow: var(--shadow); border: 1px solid var(--border); position: relative; overflow: hidden; }
+        .kpi-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; margin-bottom: 4px; }
+        .kpi-value { font-size: 24px; font-weight: 700; }
+        .kpi-value.green { color: var(--success); }
+        .kpi-value.blue { color: var(--accent); }
+        .kpi-value.red { color: var(--danger); }
+        .kpi-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; border-top: 1px dashed var(--border); padding-top: 4px; }
+
+        /* True Surplus Section (Buffer) */
+        .buffer-box { background: linear-gradient(135deg, #1e293b, #0f172a); color: white; padding: 20px; border-radius: var(--radius); margin-bottom: 24px; box-shadow: var(--shadow); }
+        .buffer-box h3 { font-size: 16px; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; display: flex; justify-content: space-between; }
+        .buffer-row { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 14px; align-items: center; }
+        .buffer-input { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 6px 10px; border-radius: 6px; width: 120px; text-align: right; font-weight: bold; font-size: 16px; }
+        .buffer-input:focus { outline: none; border-color: var(--success); background: rgba(255,255,255,0.2); }
+        .buffer-total { font-size: 20px; font-weight: bold; color: #34d399; }
+        .buffer-total.negative { color: #f87171; }
+
+        /* Cards & Lists */
+        .section-header { margin: 24px 0 12px 0; font-size: 18px; font-weight: 600; display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid var(--border); padding-bottom: 8px; }
+        .item-card { background: var(--card-bg); border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: var(--shadow); border: 1px solid var(--border); }
+        .item-card.hide-print { border-left: 4px solid #f59e0b; } /* Visuel indikation på skærm for at den skjules ved print */
+        .item-header { display: flex; justify-content: space-between; margin-bottom: 8px; }
+        .item-title { font-weight: 600; font-size: 16px; display: flex; align-items: center; gap: 8px;}
+        .item-price { font-weight: 700; color: var(--text-main); font-size: 16px; text-align: right; }
+        .badges { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+        .badge { background: #f1f5f9; color: var(--text-muted); font-size: 11px; padding: 4px 8px; border-radius: 6px; font-weight: 500; }
+        .card-actions { display: flex; justify-content: space-between; border-top: 1px solid var(--border); padding-top: 12px; margin-top: 4px; }
+        .btn-text { background: none; border: none; color: var(--accent); font-size: 13px; font-weight: 600; cursor: pointer; }
+        
+        /* Floating Button */
+        .fab { position: fixed; bottom: 24px; right: 24px; background: var(--accent); color: white; width: 60px; height: 60px; border-radius: 30px; display: flex; align-items: center; justify-content: center; font-size: 28px; box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.4); border: none; cursor: pointer; z-index: 100; }
+        
+        /* Modal */
+        dialog { border: none; border-radius: var(--radius); box-shadow: 0 25px 50px -12px rgba(0,0,0,0.3); max-width: 500px; width: 90%; margin: auto; padding: 0; background: var(--card-bg); }
+        dialog::backdrop { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); }
+        .modal-header { padding: 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; font-weight: bold; }
+        .modal-body { padding: 20px; max-height: 70vh; overflow-y: auto; }
+        .modal-footer { padding: 20px; border-top: 1px solid var(--border); display: flex; gap: 10px; }
+        .form-group { margin-bottom: 16px; }
+        label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text-main); }
+        input, select, textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 15px; background: #f8fafc; outline: none; }
+        input:focus, select:focus { border-color: var(--accent); background: white; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .checkbox-group { display: flex; align-items: center; gap: 8px; cursor: pointer; background: #fffbeb; padding: 10px; border-radius: 8px; border: 1px dashed #f59e0b; margin-top: 10px; }
+        .checkbox-group input { width: auto; }
+
+        .btn { padding: 12px; border-radius: 8px; font-weight: 600; font-size: 15px; cursor: pointer; text-align: center; border: none; width: 100%; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-outline { background: white; border: 1px solid var(--border); color: var(--text-main); }
+
+        /* Admin Tab & History */
+        .admin-list { background: #fff; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 20px; }
+        .admin-item { display: flex; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+        .admin-item:last-child { border-bottom: none; }
+        .history-card { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+        
+        /* 🖨️ PRINT STYLES */
+        @media print {
+            body { background: white; padding: 0; margin: 0; color: black; }
+            nav, .fab, .header-actions, .card-actions, button.btn, .buffer-box, #tab-historik, #tab-admin { display: none !important; }
+            .hide-print { display: none !important; } /* Skjuler elementer der er valgt fra i modal */
+            .item-card { break-inside: avoid; border: 1px solid #ccc; margin-bottom: 8px; padding: 10px; box-shadow: none; }
+            .kpi-card { box-shadow: none; border: 1px solid #ccc; break-inside: avoid; }
+            .container { max-width: 100%; padding: 0; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Faner (Navigation) -->
+<nav>
+    <button class="tab-btn active" onclick="switchTab('budget')">📊 Overblik</button>
+    <button class="tab-btn" onclick="switchTab('historik')">🗓️ Historik</button>
+    <button class="tab-btn" onclick="switchTab('admin')">⚙️ Admin</button>
+</nav>
+
+<div class="container">
+    
+    <!-- ==================== TAB 1: OVERBLIK ==================== -->
+    <main id="tab-budget" class="tab-content active">
+        <header>
+            <div>
+                <h1>Executive Budget</h1>
+                <div class="date" id="currentMonth">Familie Økonomi</div>
+            </div>
+            <div class="header-actions">
+                <button class="btn-icon" title="Grøn prik betyder du er forbundet til skyen">
+                    <span class="sync-status" id="syncDot"></span> Live
+                </button>
+                <button class="btn-icon" onclick="window.print()">🖨️ Print</button>
+            </div>
+        </header>
+
+        <!-- Buffer System (Sande overskud) -->
+        <div class="buffer-box">
+            <h3>🏦 Det Sande Overskud Lige Nu</h3>
+            <p style="font-size: 12px; color: #94a3b8; margin-bottom: 15px;">Systemet beregner hvor mange penge der burde være reserveret til kommende faste udgifter, ud fra deres næste betalingsdato, for at regne dit reelle overskud ud.</p>
+            
+            <div class="buffer-row">
+                <span>Saldo på budgetkonto (Indtast manuelt):</span>
+                <div>
+                    <input type="number" id="actualBankBalance" class="buffer-input" value="0" oninput="calculateTrueSurplus()"> kr.
+                </div>
+            </div>
+            <div class="buffer-row" style="border-top: 1px dashed rgba(255,255,255,0.2); padding-top: 10px;">
+                <span>Kommende regninger (Reserveret buffer):</span>
+                <span id="requiredBuffer" style="color: #fca5a5;">- 0 kr.</span>
+            </div>
+            <div class="buffer-row" style="margin-top: 5px;">
+                <span style="font-size: 16px; font-weight: bold;">Ægte overskud til rådighed:</span>
+                <span id="trueSurplus" class="buffer-total">0 kr.</span>
+            </div>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="kpi-card">
+                <div class="kpi-label">Samlet Indkomst</div>
+                <div class="kpi-value green" id="kpiIncome">0 kr.</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Samlede Udgifter</div>
+                <div class="kpi-value" id="kpiExpenses">0 kr.</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Månedligt Rådighedsbeløb</div>
+                <div class="kpi-value blue" id="kpiMonthlySurplus">0 kr.</div>
+            </div>
+        </div>
+
+        <div id="listsContainer"></div>
+    </main>
+
+    <!-- ==================== TAB 2: HISTORIK ==================== -->
+    <main id="tab-historik" class="tab-content">
+        <header>
+            <h1>Budget Historik</h1>
+        </header>
+        <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 20px;">
+            Her kan du gemme et "øjebliksbillede" af dit nuværende budget. Brug det til at sammenligne med tidligere måneder eller år for at se, om jeres udgifter er steget.
+        </p>
+
+        <div class="card-actions" style="border:none; padding:0; margin-bottom: 20px;">
+            <input type="text" id="snapshotName" placeholder="F.eks. Sommer 2026" style="margin: 0; border-radius: 8px 0 0 8px;">
+            <button class="btn btn-primary" style="width: auto; border-radius: 0 8px 8px 0; white-space: nowrap;" onclick="saveSnapshot()">Gem nuværende</button>
+        </div>
+
+        <h3>Gemte budgetter</h3>
+        <div id="snapshotList" style="margin-top: 10px;">
+            <!-- Snapshots kommer her -->
+        </div>
+    </main>
+
+    <!-- ==================== TAB 3: ADMIN ==================== -->
+    <main id="tab-admin" class="tab-content">
+        <header>
+            <h1>Admin Panel</h1>
+        </header>
+        <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 20px;">
+            Tilpas appen til jeres behov. Det du ændrer her, opdateres overalt i formularerne.
+        </p>
+
+        <div class="grid-2">
+            <!-- Kategorier -->
+            <div>
+                <h3>Kategorier</h3>
+                <div class="admin-list" id="adminCategories"></div>
+                <div style="display:flex;">
+                    <input type="text" id="newCat" placeholder="Ny kategori" style="border-radius: 8px 0 0 8px; margin:0;">
+                    <button class="btn-primary" style="border:none; padding:0 15px; border-radius: 0 8px 8px 0;" onclick="addSetting('categories', 'newCat')">Tilføj</button>
+                </div>
+            </div>
+            
+            <!-- Betalere -->
+            <div>
+                <h3>Hvem Betaler?</h3>
+                <div class="admin-list" id="adminPayers"></div>
+                <div style="display:flex;">
+                    <input type="text" id="newPayer" placeholder="F.eks. Fælles" style="border-radius: 8px 0 0 8px; margin:0;">
+                    <button class="btn-primary" style="border:none; padding:0 15px; border-radius: 0 8px 8px 0;" onclick="addSetting('payers', 'newPayer')">Tilføj</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid-2" style="margin-top: 24px;">
+            <!-- Betalingsmetoder -->
+            <div>
+                <h3>Betalingsmetoder</h3>
+                <div class="admin-list" id="adminMethods"></div>
+                <div style="display:flex;">
+                    <input type="text" id="newMethod" placeholder="Ny metode" style="border-radius: 8px 0 0 8px; margin:0;">
+                    <button class="btn-primary" style="border:none; padding:0 15px; border-radius: 0 8px 8px 0;" onclick="addSetting('methods', 'newMethod')">Tilføj</button>
+                </div>
+            </div>
+
+            <!-- Placeholders (Grey-out text) -->
+            <div>
+                <h3>Tekst i felter (Placeholders)</h3>
+                <div class="form-group" style="margin-top:10px;">
+                    <label>Navn på udgift:</label>
+                    <input type="text" id="phName" onchange="updatePlaceholder('name', this.value)">
+                </div>
+                <div class="form-group">
+                    <label>Udbyder/Supplier:</label>
+                    <input type="text" id="phSupplier" onchange="updatePlaceholder('supplier', this.value)">
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- Floating Action Button -->
+<button class="fab" id="fabBtn" onclick="openModal()">+</button>
+
+<!-- Add/Edit Modal -->
+<dialog id="addModal">
+    <div class="modal-header">
+        <span id="modalTitle">Tilføj Post</span>
+        <button class="btn-text" onclick="closeModal()" style="color: var(--text-main); font-size: 20px;">✕</button>
+    </div>
+    <div class="modal-body">
+        <div style="display: flex; background: #e2e8f0; border-radius: 8px; padding: 4px; margin-bottom: 20px;">
+            <button id="btnTypeExpense" style="flex:1; padding:8px; border:none; background:white; border-radius:6px; font-weight:bold; cursor:pointer;" onclick="setType('expense')">Udgift</button>
+            <button id="btnTypeIncome" style="flex:1; padding:8px; border:none; background:transparent; border-radius:6px; font-weight:bold; color:var(--text-muted); cursor:pointer;" onclick="setType('income')">Indkomst</button>
+        </div>
+
+        <input type="hidden" id="itemId">
+        <input type="hidden" id="itemType" value="expense">
+
+        <div class="form-group">
+            <label>Navn / Titel</label>
+            <input type="text" id="itemName">
+        </div>
+
+        <div class="grid-2">
+            <div class="form-group">
+                <label>Beløb pr. gang</label>
+                <input type="number" id="itemAmount" inputmode="decimal">
+            </div>
+            <div class="form-group">
+                <label>Frekvens</label>
+                <select id="itemFrequency">
+                    <option value="1">Månedlig</option>
+                    <option value="3">Kvartal (3. md)</option>
+                    <option value="4">Hver 4. måned</option>
+                    <option value="6">Halvårligt</option>
+                    <option value="12">Årligt</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="expenseFields">
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Hvem betaler?</label>
+                    <select id="itemPayer"></select>
+                </div>
+                <div class="form-group">
+                    <label>Kategori</label>
+                    <select id="itemCategory"></select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label style="color: var(--accent);">📅 Næste betalingsdato (Vigtig for buffer-udregning!)</label>
+                <input type="date" id="itemNextDate">
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Udbyder / Supplier</label>
+                    <input type="text" id="itemSupplier">
+                </div>
+                <div class="form-group">
+                    <label>Betalingsmetode</label>
+                    <select id="itemMethod"></select>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Kommentar / Noter</label>
+            <textarea id="itemComment" rows="2"></textarea>
+        </div>
+
+        <!-- PRINT CONTROL -->
+        <label class="checkbox-group">
+            <input type="checkbox" id="itemHidePrint">
+            <span style="font-size: 13px; font-weight: 600;">Skjul denne post på Print/PDF</span>
+        </label>
+    </div>
+    <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeModal()">Annuller</button>
+        <button class="btn btn-primary" onclick="saveItem()">Gem Post</button>
+    </div>
+</dialog>
+
+<!-- Sammenlignings Modal (Når man klikker på et historisk budget) -->
+<dialog id="compareModal">
+    <div class="modal-header">
+        <span>Sammenligning</span>
+        <button class="btn-text" onclick="document.getElementById('compareModal').close()">✕</button>
+    </div>
+    <div class="modal-body">
+        <h3 id="compareTitle" style="margin-bottom: 15px;"></h3>
+        <div style="display: flex; justify-content: space-between; padding: 10px; background: #f8fafc; border-radius: 8px; margin-bottom: 10px;">
+            <span>Historisk faste udgifter:</span>
+            <strong id="compareOld">0 kr.</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; padding: 10px; background: #f8fafc; border-radius: 8px; margin-bottom: 10px;">
+            <span>Nuværende faste udgifter:</span>
+            <strong id="compareNew">0 kr.</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; padding: 10px; border-radius: 8px; font-size: 18px; font-weight: bold; border: 1px solid var(--border);" id="compareResultBox">
+            <span>Forskel:</span>
+            <span id="compareDiff">0 kr.</span>
+        </div>
+    </div>
+</dialog>
+
+
+<script>
+    // -------------------------------------------------------------
+    // 1. INDSÆT DIN FIREBASE CONFIG HERUNDER:
+    // -------------------------------------------------------------
+    const firebaseConfig = {
+  apiKey: "AIzaSyB6YdgyPEZc82v8Kh3Um4824EU868al1K4",
+  authDomain: "budget-ac956.firebaseapp.com",
+  databaseURL: "https://budget-ac956-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "budget-ac956",
+  storageBucket: "budget-ac956.firebasestorage.app",
+  messagingSenderId: "251555974367",
+  appId: "1:251555974367:web:e3408eaab7a2095d98ad6a"
+};
+
+    // --- STATE MANAGEMENT ---
+    let items = [];
+    let snapshots = {};
+    let bankBalance = 0;
+    
+    // Standard Admin Settings (Gemmes i skyen)
+    let settings = {
+        categories: ["Hus & Bolig", "Forsikringer", "Biler & Transport", "Abonnementer", "Faste Udgifter"],
+        payers: ["Fælles", "Mike", "Maria"],
+        methods: ["Betalingsservice (BS)", "Kortbetaling", "Bankoverførsel", "MobilePay"],
+        placeholders: {
+            name: "F.eks. Realkredit, Løn, El...",
+            supplier: "F.eks. Totalkredit, Tryg..."
+        }
+    };
+
+    let dbRef = null;
+
+    // INITIALISERING AF FIREBASE
+    if (firebaseConfig.apiKey !== "DIN_API_KEY") {
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        dbRef = db.ref('familie_budget_v2'); 
+
+        db.ref('.info/connected').on('value', snap => {
+            const dot = document.getElementById('syncDot');
+            snap.val() === true ? dot.classList.add('active') : dot.classList.remove('active');
+        });
+
+        dbRef.on('value', snapshot => {
+            const data = snapshot.val();
+            if (data) {
+                items = data.items || [];
+                snapshots = data.snapshots || {};
+                if(data.settings) settings = data.settings;
+                if(data.bankBalance !== undefined) {
+                    bankBalance = data.bankBalance;
+                    document.getElementById('actualBankBalance').value = bankBalance;
+                }
+                
+                renderDashboard();
+                renderAdmin();
+                renderHistory();
+            }
+        });
+    }
+
+    function pushToCloud() {
+        if (dbRef) dbRef.set({ items, snapshots, settings, bankBalance });
+    }
+
+    // --- UI FUNKTIONER ---
+    const formatCurrency = amount => amount.toLocaleString('da-DK', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' kr.';
+    const getFreqText = f => ({1: "Måned", 3: "Kvartal", 4: "4. Måned", 6: "Halvår", 12: "År"}[f] || "Periode");
+
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        
+        document.getElementById('tab-' + tabId).classList.add('active');
+        event.currentTarget.classList.add('active');
+        
+        // Skjul + knap på historik/admin
+        document.getElementById('fabBtn').style.display = tabId === 'budget' ? 'flex' : 'none';
+    }
+
+    // --- BUFFER & SANDT OVERSKUD BEREGNING ---
+    function calculateTrueSurplus() {
+        const inputBalance = parseFloat(document.getElementById('actualBankBalance').value) || 0;
+        bankBalance = inputBalance;
+        
+        let requiredBuffer = 0;
+        const now = new Date();
+
+        items.filter(i => i.type === 'expense').forEach(item => {
+            if (!item.nextDate) return; // Kan ikke beregne buffer uden dato
+            
+            const nextD = new Date(item.nextDate);
+            // Udregn forskel i måneder groft
+            let monthsDiff = (nextD.getFullYear() - now.getFullYear()) * 12 + nextD.getMonth() - now.getMonth();
+            
+            if (monthsDiff < 0) monthsDiff = 0; // Regning er "forfalden" eller i denne måned
+            
+            let freq = parseInt(item.frequency);
+            // Hvor mange måneder *burde* vi have sparet op?
+            // Eks: Freq 6, monthsDiff 2 -> vi bør have sparet op til 4 mdr.
+            let accruedMonths = freq - (monthsDiff % freq); 
+            if (accruedMonths > freq) accruedMonths = freq;
+            if (monthsDiff === 0) accruedMonths = freq; // Falder den nu, skal hele beløbet ligge der
+            
+            const monthlyCost = item.amount / freq;
+            requiredBuffer += (monthlyCost * accruedMonths);
+        });
+
+        document.getElementById('requiredBuffer').textContent = "- " + formatCurrency(requiredBuffer);
+        
+        const trueSurplus = bankBalance - requiredBuffer;
+        const el = document.getElementById('trueSurplus');
+        el.textContent = formatCurrency(trueSurplus);
+        el.className = 'buffer-total ' + (trueSurplus < 0 ? 'negative' : '');
+        
+        // Push saldo update silently to sync to other phone
+        if(dbRef) dbRef.child('bankBalance').set(bankBalance);
+    }
+
+
+    // --- MODAL & ITEMS ---
+    function populateDropdowns() {
+        const catSelect = document.getElementById('itemCategory');
+        const payerSelect = document.getElementById('itemPayer');
+        const methodSelect = document.getElementById('itemMethod');
+        
+        catSelect.innerHTML = settings.categories.map(c => `<option value="${c}">${c}</option>`).join('');
+        payerSelect.innerHTML = settings.payers.map(p => `<option value="${p}">${p}</option>`).join('');
+        methodSelect.innerHTML = settings.methods.map(m => `<option value="${m}">${m}</option>`).join('');
+        
+        document.getElementById('itemName').placeholder = settings.placeholders.name;
+        document.getElementById('itemSupplier').placeholder = settings.placeholders.supplier;
+    }
+
+    function setType(type) {
+        document.getElementById('itemType').value = type;
+        const btnExp = document.getElementById('btnTypeExpense');
+        const btnInc = document.getElementById('btnTypeIncome');
+        if (type === 'income') {
+            btnInc.style.background = 'white'; btnInc.style.color = 'var(--text-main)';
+            btnExp.style.background = 'transparent'; btnExp.style.color = 'var(--text-muted)';
+            document.getElementById('expenseFields').style.display = 'none';
+        } else {
+            btnExp.style.background = 'white'; btnExp.style.color = 'var(--text-main)';
+            btnInc.style.background = 'transparent'; btnInc.style.color = 'var(--text-muted)';
+            document.getElementById('expenseFields').style.display = 'block';
+        }
+    }
+
+    function openModal(id = null) {
+        populateDropdowns();
+        document.getElementById('itemId').value = '';
+        document.getElementById('itemName').value = '';
+        document.getElementById('itemAmount').value = '';
+        document.getElementById('itemNextDate').value = '';
+        document.getElementById('itemSupplier').value = '';
+        document.getElementById('itemComment').value = '';
+        document.getElementById('itemHidePrint').checked = false;
+        setType('expense');
+
+        if (id) {
+            const item = items.find(i => i.id === id);
+            if (item) {
+                document.getElementById('itemId').value = item.id;
+                setType(item.type || 'expense');
+                document.getElementById('itemName').value = item.name;
+                document.getElementById('itemAmount').value = item.amount;
+                document.getElementById('itemFrequency').value = item.frequency;
+                document.getElementById('itemComment').value = item.comment || '';
+                document.getElementById('itemHidePrint').checked = item.hidePrint || false;
+
+                if (item.type !== 'income') {
+                    document.getElementById('itemPayer').value = item.payer;
+                    document.getElementById('itemCategory').value = item.category;
+                    document.getElementById('itemNextDate').value = item.nextDate || '';
+                    document.getElementById('itemSupplier').value = item.supplier || '';
+                    document.getElementById('itemMethod').value = item.method || '';
+                }
+            }
+        }
+        document.getElementById('addModal').showModal();
+    }
+
+    function closeModal() { document.getElementById('addModal').close(); }
+
+    function saveItem() {
+        const id = document.getElementById('itemId').value;
+        const type = document.getElementById('itemType').value;
+        const name = document.getElementById('itemName').value;
+        const amount = parseFloat(document.getElementById('itemAmount').value);
+        
+        if (!name || isNaN(amount)) return alert("Udfyld navn og beløb.");
+
+        const newItem = {
+            id: id ? parseInt(id) : Date.now(),
+            type, name, amount,
+            frequency: parseInt(document.getElementById('itemFrequency').value),
+            comment: document.getElementById('itemComment').value,
+            hidePrint: document.getElementById('itemHidePrint').checked
+        };
+
+        if (type === 'expense') {
+            newItem.payer = document.getElementById('itemPayer').value;
+            newItem.category = document.getElementById('itemCategory').value;
+            newItem.nextDate = document.getElementById('itemNextDate').value;
+            newItem.supplier = document.getElementById('itemSupplier').value;
+            newItem.method = document.getElementById('itemMethod').value;
+        } else {
+            newItem.category = 'Indkomst';
+        }
+
+        if (id) items = items.map(i => i.id === parseInt(id) ? newItem : i);
+        else items.push(newItem);
+
+        pushToCloud();
+        closeModal();
+    }
+
+    function deleteItem(id) {
+        if(confirm("Slet post?")) {
+            items = items.filter(i => i.id !== id);
+            pushToCloud();
+        }
+    }
+
+    // --- RENDERING AF DASHBOARD ---
+    function renderDashboard() {
+        const container = document.getElementById('listsContainer');
+        container.innerHTML = '';
+
+        let tInc = 0, tExp = 0;
+        const groups = {};
+
+        items.forEach(item => {
+            const monthly = item.amount / item.frequency;
+            if (item.type === 'income') {
+                tInc += monthly;
+                if (!groups['Indkomst']) groups['Indkomst'] = [];
+                groups['Indkomst'].push(item);
+            } else {
+                tExp += monthly;
+                if (!groups[item.category]) groups[item.category] = [];
+                groups[item.category].push(item);
+            }
+        });
+
+        document.getElementById('kpiIncome').textContent = formatCurrency(tInc);
+        document.getElementById('kpiExpenses').textContent = formatCurrency(tExp);
+        const surp = tInc - tExp;
+        document.getElementById('kpiMonthlySurplus').textContent = formatCurrency(surp);
+        
+        calculateTrueSurplus(); // Opdater buffer
+
+        const catKeys = Object.keys(groups).sort((a,b) => a==='Indkomst'?-1:b==='Indkomst'?1:a.localeCompare(b));
+
+        catKeys.forEach(cat => {
+            const grpItems = groups[cat];
+            const catTotal = grpItems.reduce((acc, i) => acc + (i.amount / i.frequency), 0);
+            
+            const sec = document.createElement('div');
+            sec.innerHTML = `<div class="section-header"><span>${cat}</span> <span style="font-size:14px; color:#64748b;">${formatCurrency(catTotal)}/md</span></div>`;
+
+            grpItems.forEach(item => {
+                const isInc = item.type === 'income';
+                const monthly = item.amount / item.frequency;
+                
+                const card = document.createElement('div');
+                card.className = `item-card ${item.hidePrint ? 'hide-print' : ''}`;
+                
+                let details = '';
+                if(item.nextDate) details += `<span class="badge" style="background:#e0e7ff; color:#4338ca;">Næste: ${item.nextDate}</span> `;
+                if(item.method) details += `<span class="badge">${item.method}</span> `;
+                if(item.payer) details += `<span class="badge" style="background:#e0f2fe; color:#0284c7;">${item.payer}</span> `;
+                
+                card.innerHTML = `
+                    <div class="item-header">
+                        <div class="item-title">
+                            ${item.name}
+                            ${item.hidePrint ? '<span title="Skjult ved print" style="font-size:12px;">🙈</span>' : ''}
+                        </div>
+                        <div class="item-price" style="color:${isInc ? 'var(--success)' : 'var(--text-main)'}">
+                            ${isInc ? '+' : ''}${formatCurrency(monthly)} <span style="font-size:10px; color:var(--text-muted)">/md</span>
+                        </div>
+                    </div>
+                    <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">${formatCurrency(item.amount)} pr. ${getFreqText(item.frequency)} ${item.supplier ? '• ' + item.supplier : ''}</div>
+                    ${!isInc ? `<div class="badges">${details}</div>` : ''}
+                    ${item.comment ? `<div style="font-size:12px; font-style:italic; color:#94a3b8; margin-bottom:8px;">"${item.comment}"</div>` : ''}
+                    <div class="card-actions">
+                        <button class="btn-text" onclick="openModal(${item.id})">Rediger</button>
+                        <button class="btn-text" style="color:var(--danger);" onclick="deleteItem(${item.id})">Slet</button>
+                    </div>
+                `;
+                sec.appendChild(card);
+            });
+            container.appendChild(sec);
+        });
+    }
+
+    // --- ADMIN FUNKTIONER ---
+    function renderAdmin() {
+        const renderArr = (id, arr, key) => {
+            document.getElementById(id).innerHTML = arr.map((val, i) => `
+                <div class="admin-item">
+                    <span>${val}</span>
+                    <button class="btn-text" style="color:var(--danger)" onclick="delSetting('${key}', ${i})">Slet</button>
+                </div>
+            `).join('');
+        };
+        renderArr('adminCategories', settings.categories, 'categories');
+        renderArr('adminPayers', settings.payers, 'payers');
+        renderArr('adminMethods', settings.methods, 'methods');
+        
+        document.getElementById('phName').value = settings.placeholders.name;
+        document.getElementById('phSupplier').value = settings.placeholders.supplier;
+    }
+
+    function addSetting(key, inputId) {
+        const val = document.getElementById(inputId).value.trim();
+        if(val && !settings[key].includes(val)) {
+            settings[key].push(val);
+            document.getElementById(inputId).value = '';
+            pushToCloud();
+        }
+    }
+    function delSetting(key, index) {
+        settings[key].splice(index, 1);
+        pushToCloud();
+    }
+    function updatePlaceholder(type, val) {
+        settings.placeholders[type] = val;
+        pushToCloud();
+    }
+
+    // --- HISTORIK FUNKTIONER ---
+    function saveSnapshot() {
+        const name = document.getElementById('snapshotName').value.trim();
+        if(!name) return alert("Giv budgettet et navn (f.eks. 'August 2026').");
+        
+        const id = Date.now().toString();
+        // Udregn total udgift nu
+        const totalExp = items.filter(i=>i.type==='expense').reduce((a,i)=>a+(i.amount/i.frequency),0);
+        
+        snapshots[id] = { name, total: totalExp, date: new Date().toLocaleDateString() };
+        document.getElementById('snapshotName').value = '';
+        pushToCloud();
+    }
+
+    function renderHistory() {
+        const list = document.getElementById('snapshotList');
+        list.innerHTML = Object.keys(snapshots).reverse().map(id => {
+            const s = snapshots[id];
+            return `
+            <div class="history-card">
+                <div>
+                    <div style="font-weight:600;">${s.name}</div>
+                    <div style="font-size:12px; color:var(--text-muted)">Oprettet: ${s.date} • ${formatCurrency(s.total)}/md</div>
+                </div>
+                <div>
+                    <button class="btn-text" onclick="compareSnapshot('${id}')">Sammenlign</button>
+                    <button class="btn-text" style="color:var(--danger); margin-left:10px;" onclick="delSnapshot('${id}')">Slet</button>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    function delSnapshot(id) {
+        if(confirm("Slet dette gemte budget?")) { delete snapshots[id]; pushToCloud(); }
+    }
+
+    function compareSnapshot(id) {
+        const s = snapshots[id];
+        const currentExp = items.filter(i=>i.type==='expense').reduce((a,i)=>a+(i.amount/i.frequency),0);
+        const diff = currentExp - s.total;
+        
+        document.getElementById('compareTitle').textContent = `Nu vs. ${s.name}`;
+        document.getElementById('compareOld').textContent = formatCurrency(s.total);
+        document.getElementById('compareNew').textContent = formatCurrency(currentExp);
+        
+        const diffEl = document.getElementById('compareDiff');
+        diffEl.textContent = (diff > 0 ? '+' : '') + formatCurrency(diff);
+        
+        const box = document.getElementById('compareResultBox');
+        if(diff > 0) { box.style.background = '#fee2e2'; box.style.color = '#b91c1c'; box.style.borderColor = '#fca5a5'; } 
+        else if (diff < 0) { box.style.background = '#d1fae5'; box.style.color = '#047857'; box.style.borderColor = '#6ee7b7'; }
+        else { box.style.background = '#f1f5f9'; box.style.color = '#334155'; box.style.borderColor = '#cbd5e1'; }
+
+        document.getElementById('compareModal').showModal();
+    }
+
+    // Init Page Date
+    document.addEventListener('DOMContentLoaded', () => {
+        const d = new Date();
+        const months = ["Januar","Februar","Marts","April","Maj","Juni","Juli","August","September","Oktober","November","December"];
+        document.getElementById('currentMonth').textContent = months[d.getMonth()] + " " + d.getFullYear();
+    });
+</script>
+
+</body>
+</html>
